@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulação Órbita Terra-Sol Melhorada</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; background-color: #000; color: #fff; }
+        #container { width: 100vw; height: 100vh; display: block; }
+
+        .controls-container {
+            position: absolute;
+            top: 50%;
+            right: 20px;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px; /* Espaço entre grupos */
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            padding-top: 40px; /* Espaço para botão recolher */
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            width: 220px;
+            max-height: 95vh;
+            overflow-y: auto;
+            transition: right 0.5s ease-in-out, width 0.5s ease-in-out;
+            z-index: 10;
+        }
+
+        .controls-container.collapsed {
+            right: -190px;
+        }
+        .controls-container.collapsed > *:not(#toggleControlsBtn) {
+             opacity: 0;
+             visibility: hidden;
+             transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+        }
+
+        #toggleControlsBtn {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 5px;
+            border-radius: 50%;
+            cursor: pointer;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.3s ease, transform 0.5s ease-in-out;
+            z-index: 11;
+        }
+        #toggleControlsBtn:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        #toggleControlsBtn svg {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.5s ease-in-out;
+        }
+        .controls-container.collapsed #toggleControlsBtn svg {
+             transform: rotate(180deg);
+        }
+         .controls-container.collapsed #toggleControlsBtn {
+             /* Ajustes de posição se necessário ao recolher */
+         }
+
+        /* Estilos para os grupos de botões e controles */
+        #viewControls, #seasonButtons, #actionButtons, #sliderControls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+            align-items: stretch; /* Alinha itens para preencher largura */
+            transition: opacity 0.3s ease, visibility 0s linear 0s;
+        }
+
+        /* Controle de visualização */
+        #viewControls {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            align-items: flex-start; /* Alinha checkboxes à esquerda */
+        }
+        .checkbox-group { /* Agrupa checkbox e label */
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px; /* Espaço entre as opções */
+        }
+        .checkbox-group:last-child {
+             margin-bottom: 0;
+        }
+        .checkbox-group label {
+            font-size: 0.85rem;
+            margin-left: 6px;
+            cursor: pointer;
+            color: #eee; /* Cor mais clara para label */
+        }
+         .checkbox-group input[type="checkbox"] {
+            cursor: pointer;
+            accent-color: #facc15;
+            width: 15px; /* Tamanho do checkbox */
+            height: 15px;
+         }
+
+
+        #seasonButtons button, #actionButtons button { /* Estilo comum para botões */
+            color: white;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background-color 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        #seasonButtons button { /* Cor específica para botões de estação */
+             background-color: #4a5568; /* Cinza */
+        }
+        #seasonButtons button:hover {
+            background-color: #718096;
+        }
+         #seasonButtons button:active {
+            background-color: #2d3748;
+        }
+
+        /* Cores para botão Play/Pause */
+        #playPauseBtn {
+            background-color: #2c5282; /* Azul */
+        }
+        #playPauseBtn:hover {
+            background-color: #4299e1; /* Azul mais claro */
+        }
+        #playPauseBtn:active {
+            background-color: #2a4365; /* Azul mais escuro */
+        }
+         #playPauseBtn.playing { /* Estilo quando está animando */
+             background-color: #dd6b20; /* Laranja */
+         }
+         #playPauseBtn.playing:hover {
+             background-color: #ed8936; /* Laranja mais claro */
+         }
+         #playPauseBtn.playing:active {
+             background-color: #c05621; /* Laranja mais escuro */
+         }
+
+
+        #resetViewBtn { /* Cor específica para botão de reiniciar */
+            background-color: #c53030; /* Vermelho */
+        }
+        #resetViewBtn:hover {
+            background-color: #e53e3e; /* Vermelho mais claro */
+        }
+        #resetViewBtn:active {
+            background-color: #9b2c2c; /* Vermelho mais escuro */
+        }
+
+        #sliderControls {
+            align-items: center; /* Centraliza label, slider, value */
+            gap: 10px;
+        }
+        #sliderControls label { /* Label do slider */
+            font-weight: 500;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            color: #fff; /* Garante cor branca */
+        }
+        input[type="range"] {
+            width: 100%;
+            max-width: 180px;
+            cursor: pointer;
+            accent-color: #facc15;
+            height: 8px;
+            border-radius: 4px;
+        }
+        #angleValue {
+            font-weight: bold;
+            min-width: 35px;
+            text-align: center;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 18px;
+          height: 18px;
+          background: #facc15;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid #fff;
+        }
+        input[type=range]::-moz-range-thumb {
+          width: 16px;
+          height: 16px;
+          background: #facc15;
+          border-radius: 50%;
+          cursor: pointer;
+          border: 2px solid #fff;
+        }
+
+        /* Caixa de Informação das Estações - Usando visibility/opacity */
+        #seasonInfoBox {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            /* Estilos quando NÃO visível (padrão) */
+            visibility: hidden;
+            opacity: 0;
+            padding: 0; /* Remove padding quando escondido */
+            border: none; /* Remove borda quando escondido */
+            pointer-events: none;
+            transition: opacity 0.3s ease, visibility 0s linear 0.3s, padding 0s linear 0.3s, border 0s linear 0.3s;
+            /* Estilos base (sempre aplicados) */
+            background-color: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            z-index: 5;
+            text-align: left;
+            line-height: 1.4;
+        }
+        #seasonInfoBox.visible {
+             /* Estilos quando visível */
+             visibility: visible;
+             opacity: 1;
+             padding: 10px 15px; /* Restaura padding */
+             border: 1px solid rgba(255, 255, 255, 0.2); /* Restaura borda */
+             pointer-events: auto;
+             transition: opacity 0.3s ease, visibility 0s linear 0s, padding 0s linear 0s, border 0s linear 0s;
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="container"></div>
+
+    <div id="seasonInfoBox">
+        </div>
+
+    <div class="controls-container rounded-lg" id="controlsContainer">
+         <button id="toggleControlsBtn" title="Recolher/Expandir Painel">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11.25 4.5l7.5 7.5-7.5 7.5m-6-15l7.5 7.5-7.5 7.5" />
+            </svg>
+         </button>
+
+         <div id="viewControls">
+             <div class="checkbox-group">
+                 <input type="checkbox" id="orbitCheckbox" checked>
+                 <label for="orbitCheckbox">Mostrar Órbita</label>
+             </div>
+             <div class="checkbox-group">
+                 <input type="checkbox" id="seasonCheckbox">
+                 <label for="seasonCheckbox">Mostrar Estações</label>
+             </div>
+             <div class="checkbox-group"> <input type="checkbox" id="axisLabelsCheckbox">
+                 <label for="axisLabelsCheckbox">Mostrar Eixo N/S</label>
+             </div>
+         </div>
+
+        <div id="seasonButtons">
+             <button id="btnOutono">Equinócio de Outono (Sul)</button>
+             <button id="btnInverno">Solstício de Inverno (Sul)</button>
+             <button id="btnPrimavera">Equinócio de Primavera (Sul)</button>
+             <button id="btnVerão">Solstício de Verão (Sul)</button>
+        </div>
+         <div id="actionButtons">
+            <button id="playPauseBtn">Iniciar Animação</button>
+            <button id="resetViewBtn">Reiniciar Visualização</button>
+         </div>
+        <div id="sliderControls">
+            <label for="orbitSlider">Posição Orbital:</label>
+            <input type="range" id="orbitSlider" min="0" max="360" value="0" step="1">
+            <span id="angleValue">0°</span>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+        import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
+
+
+        let scene, camera, renderer;
+        let sun, earth, earthOrbit, axisLine, equatorLine, tiltGroup, stars, orbitLine; // Reintroduzido tiltGroup
+        let northLabel, southLabel; // Variáveis para as labels N/S no eixo
+        let controls;
+        const orbitRadiusX = 15;
+        const orbitRadiusZ = 12;
+        const earthTilt = 23.5 * Math.PI / 180;
+        const axisLabelOffset = 1.8; // Distância das labels N/S das pontas do eixo
+
+        // Variáveis de animação
+        let isAnimating = false;
+        let currentAngle = 0;
+        const orbitSpeed = 20; // Graus por segundo (negativo para anti-horário)
+        const clock = new THREE.Clock();
+
+        // Referências aos elementos do DOM
+        const slider = document.getElementById('orbitSlider');
+        const angleValueSpan = document.getElementById('angleValue');
+        const orbitCheckbox = document.getElementById('orbitCheckbox');
+        const seasonCheckbox = document.getElementById('seasonCheckbox');
+        const axisLabelsCheckbox = document.getElementById('axisLabelsCheckbox');
+        const seasonInfoBox = document.getElementById('seasonInfoBox');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const btnOutono = document.getElementById('btnOutono');
+        const btnInverno = document.getElementById('btnInverno');
+        const btnPrimavera = document.getElementById('btnPrimavera');
+        const btnVerão = document.getElementById('btnVerão');
+        const controlsContainer = document.getElementById('controlsContainer');
+        const toggleControlsBtn = document.getElementById('toggleControlsBtn');
+        const resetViewBtn = document.getElementById('resetViewBtn');
+
+        // --- Inicialização ---
+        function init() {
+            scene = new THREE.Scene();
+            createStarfield();
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, 20);
+            camera.lookAt(scene.position);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.getElementById('container').appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.screenSpacePanning = false;
+            controls.minDistance = 5;
+            controls.maxDistance = 100;
+            controls.saveState();
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+            scene.add(ambientLight);
+
+            // --- Sol ---
+            const sunGeometry = new THREE.SphereGeometry(2, 32, 32);
+            const sunMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+            sun = new THREE.Mesh(sunGeometry, sunMaterial);
+            scene.add(sun);
+            const pointLight = new THREE.PointLight(0xffffff, 400, 150);
+            pointLight.position.set(0, 0, 0);
+            scene.add(pointLight);
+
+            // --- Terra ---
+            const earthGeometry = new THREE.SphereGeometry(0.8, 32, 32);
+            const earthMaterial = new THREE.MeshStandardMaterial({
+                color: 0x6699CC,
+                roughness: 0.9,
+                metalness: 0.1
+             });
+            earth = new THREE.Mesh(earthGeometry, earthMaterial);
+             // NÃO aplicar inclinação diretamente na Terra
+
+            // --- Eixo e Equador ---
+            const axisMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const axisPoints = [new THREE.Vector3(0, -1.5, 0), new THREE.Vector3(0, 1.5, 0)];
+            const axisGeometry = new THREE.BufferGeometry().setFromPoints(axisPoints);
+            axisLine = new THREE.Line(axisGeometry, axisMaterial);
+            earth.add(axisLine);
+            const equatorMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+            const equatorGeometry = new THREE.RingGeometry(0.81, 0.82, 64);
+            equatorGeometry.rotateX(Math.PI / 2);
+            equatorLine = new THREE.LineSegments(equatorGeometry, equatorMaterial);
+            earth.add(equatorLine);
+
+            // --- Labels N/S no Eixo ---
+            createAxisLabels();
+
+            // --- Estrutura de Grupos para Inclinação Constante ---
+            // 1. tiltGroup: Contém a Terra e aplica a inclinação axial
+            tiltGroup = new THREE.Group();
+            tiltGroup.rotation.x = earthTilt; // Aplica inclinação em torno do eixo X MUNDIAL
+            tiltGroup.add(earth); // Adiciona a Terra (sem inclinação própria) ao grupo inclinado
+
+            // 2. earthOrbit: Contém o tiltGroup e posiciona tudo na órbita
+            earthOrbit = new THREE.Group();
+            earthOrbit.add(tiltGroup); // Adiciona o grupo já inclinado ao grupo orbital
+            scene.add(earthOrbit); // Adiciona o grupo orbital à cena
+
+
+            // --- Órbita (visual) ---
+            const orbitMaterial = new THREE.LineBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.4 });
+            const orbitShape = new THREE.EllipseCurve(0, 0, orbitRadiusX, orbitRadiusZ, 0, 2 * Math.PI, false, 0);
+            const orbitPoints = orbitShape.getPoints(100);
+            const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+            orbitGeometry.rotateX(Math.PI / 2);
+            orbitLine = new THREE.Line(orbitGeometry, orbitMaterial);
+            orbitLine.visible = orbitCheckbox.checked;
+            scene.add(orbitLine);
+
+            // --- Controles Interativos ---
+            // Slider
+            slider.addEventListener('input', (event) => {
+                const angle = parseInt(event.target.value);
+                currentAngle = angle;
+                setOrbitalPosition(angle);
+                pauseAnimation();
+                clearAndHideSeasonInfo();
+            });
+
+            // Botões de Estação (Ângulos Corretos para Estrutura Atual e Órbita Anti-Horária Sul)
+            btnOutono.addEventListener('click', () => { handleSeasonButtonClick(0, "Outono", "Primavera"); });   // 0°
+            btnInverno.addEventListener('click', () => { handleSeasonButtonClick(270, "Inverno", "Verão"); });  // 270°
+            btnPrimavera.addEventListener('click', () => { handleSeasonButtonClick(180, "Primavera", "Outono"); });// 180°
+            btnVerão.addEventListener('click', () => { handleSeasonButtonClick(90, "Verão", "Inverno"); });     // 90°
+
+            // Checkbox da Órbita
+            orbitCheckbox.addEventListener('change', (event) => {
+                orbitLine.visible = event.target.checked;
+            });
+
+            // Checkbox das Estações (Controla visibilidade da caixa)
+            seasonCheckbox.addEventListener('change', () => {
+                updateSeasonInfoVisibility();
+            });
+
+            // Checkbox Eixo N/S
+            axisLabelsCheckbox.addEventListener('change', (event) => {
+                const isVisible = event.target.checked;
+                // As labels são filhas da Terra, que está dentro do tiltGroup
+                if (northLabel) northLabel.visible = isVisible;
+                if (southLabel) southLabel.visible = isVisible;
+            });
+
+            // Botão Play/Pause
+            playPauseBtn.addEventListener('click', () => {
+                toggleAnimation();
+                clearAndHideSeasonInfo();
+            });
+
+            // Botão de recolher/expandir
+            toggleControlsBtn.addEventListener('click', () => {
+                controlsContainer.classList.toggle('collapsed');
+            });
+
+            // Botão de reiniciar visualização
+            resetViewBtn.addEventListener('click', () => {
+                setOrbitalPosition(0);
+                currentAngle = 0;
+                controls.reset();
+                pauseAnimation();
+                controlsContainer.classList.remove('collapsed');
+                orbitCheckbox.checked = true;
+                orbitLine.visible = true;
+                seasonCheckbox.checked = false;
+                clearAndHideSeasonInfo();
+                axisLabelsCheckbox.checked = false;
+                if (northLabel) northLabel.visible = false;
+                if (southLabel) southLabel.visible = false;
+            });
+
+            // Define a posição inicial
+            currentAngle = parseInt(slider.value);
+            setOrbitalPosition(currentAngle);
+            clearAndHideSeasonInfo(); // Garante que a caixa de info começa limpa e escondida
+
+            // Responsividade
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Inicia animação
+            animate();
+        }
+
+        // --- Função para criar o fundo estrelado ---
+        function createStarfield() {
+            const vertices = [];
+            for (let i = 0; i < 5000; i++) {
+                const x = THREE.MathUtils.randFloatSpread(1000);
+                const y = THREE.MathUtils.randFloatSpread(1000);
+                const z = THREE.MathUtils.randFloatSpread(1000);
+                vertices.push(x, y, z);
+            }
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            const material = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.2,
+                sizeAttenuation: true
+            });
+            stars = new THREE.Points(geometry, material);
+            scene.add(stars);
+        }
+
+         // --- Função para criar as labels N/S no eixo ---
+         function createAxisLabels() {
+             const loader = new FontLoader();
+             loader.load('https://cdn.jsdelivr.net/npm/three@0.164.1/examples/fonts/helvetiker_regular.typeface.json', function (font) {
+                const textMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    side: THREE.DoubleSide
+                });
+                const textHeight = 0.05;
+                const textSize = 0.3;
+
+                // Texto "N"
+                const northTextGeo = new TextGeometry('N', { font: font, size: textSize, height: textHeight });
+                northTextGeo.center();
+                northLabel = new THREE.Mesh(northTextGeo, textMaterial);
+                northLabel.position.set(0, axisLabelOffset, 0); // Posicionado relativo à Terra (antes da inclinação do grupo)
+                northLabel.visible = axisLabelsCheckbox.checked;
+                earth.add(northLabel); // Adiciona como filho da Terra
+
+                // Texto "S"
+                const southTextGeo = new TextGeometry('S', { font: font, size: textSize, height: textHeight });
+                southTextGeo.center();
+                southLabel = new THREE.Mesh(southTextGeo, textMaterial);
+                southLabel.position.set(0, -axisLabelOffset, 0); // Posicionado relativo à Terra (antes da inclinação do grupo)
+                southLabel.visible = axisLabelsCheckbox.checked;
+                earth.add(southLabel); // Adiciona como filho da Terra
+             });
+         }
+
+
+        // --- Função chamada pelos botões de estação ---
+        function handleSeasonButtonClick(angle, seasonSouth, seasonNorth) {
+            setOrbitalPosition(angle);
+            pauseAnimation();
+            currentAngle = angle;
+            updateSeasonInfoContent(seasonSouth, seasonNorth); // Define o conteúdo
+            updateSeasonInfoVisibility(); // Mostra ou esconde baseado no checkbox
+        }
+
+        // --- Função para ATUALIZAR o CONTEÚDO da info das estações ---
+        function updateSeasonInfoContent(south, north) {
+            seasonInfoBox.innerHTML = `Hemisfério Sul: <strong>${south}</strong><br>Hemisfério Norte: <strong>${north}</strong>`;
+        }
+
+        // --- Função para ATUALIZAR a VISIBILIDADE da info das estações ---
+        function updateSeasonInfoVisibility() {
+            // Mostra apenas se checkbox está marcado E se a caixa tem conteúdo
+            if (seasonCheckbox.checked && seasonInfoBox.innerHTML !== "") {
+                 seasonInfoBox.classList.add('visible');
+            } else {
+                 seasonInfoBox.classList.remove('visible');
+            }
+        }
+
+        // --- Função para LIMPAR e ESCONDER a info das estações ---
+        function clearAndHideSeasonInfo() {
+            seasonInfoBox.innerHTML = ""; // Limpa o conteúdo
+            seasonInfoBox.classList.remove('visible'); // Garante que está escondida
+        }
+
+
+        // --- Função para definir a posição orbital (sem atualizar currentAngle) ---
+        function setOrbitalPosition(angleDegrees) {
+            angleDegrees = angleDegrees % 360;
+            if (angleDegrees < 0) angleDegrees += 360; // Garante que o ângulo seja sempre positivo
+
+            angleValueSpan.textContent = `${Math.round(angleDegrees)}°`;
+            if (parseInt(slider.value) !== Math.round(angleDegrees)) {
+                 slider.value = Math.round(angleDegrees);
+            }
+
+            const angleRadians = angleDegrees * Math.PI / 180;
+            const x = orbitRadiusX * Math.cos(angleRadians);
+            const z = orbitRadiusZ * Math.sin(angleRadians);
+            earthOrbit.position.set(x, 0, z); // Move o grupo orbital (que contém o grupo inclinado com a Terra)
+        }
+
+        // --- Funções de controle da animação ---
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+            updatePlayPauseButton();
+        }
+
+        function pauseAnimation() {
+            if (isAnimating) {
+                isAnimating = false;
+                updatePlayPauseButton();
+            }
+        }
+
+        function updatePlayPauseButton() {
+            if (isAnimating) {
+                playPauseBtn.textContent = 'Pausar Animação';
+                playPauseBtn.classList.add('playing');
+            } else {
+                playPauseBtn.textContent = 'Iniciar Animação';
+                playPauseBtn.classList.remove('playing');
+            }
+        }
+
+        // --- Redimensionamento da Janela ---
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Loop de Animação ---
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            // Atualiza a órbita automática se ativa (sentido ANTI-HORÁRIO)
+            if (isAnimating) {
+                currentAngle -= orbitSpeed * delta; // <<< DECREMENTA O ÂNGULO
+                // Garante que o ângulo permaneça entre 0 e 360
+                currentAngle = (currentAngle % 360 + 360) % 360;
+                setOrbitalPosition(currentAngle); // Atualiza a posição visual
+                 clearAndHideSeasonInfo();
+            }
+
+            // Faz as labels N/S sempre olharem para a câmera (efeito billboard)
+            // Como as labels são filhas da Terra, que está no grupo inclinado,
+            // copiar a rotação da câmera diretamente pode não ser o ideal.
+            // Uma abordagem melhor seria calcular a rotação necessária para encarar a câmera.
+            // Mas vamos manter a cópia por enquanto, pode ser suficiente.
+            if (northLabel) {
+                // Mantém a posição relativa ao eixo da Terra, mas vira para a câmera
+                northLabel.quaternion.copy(camera.quaternion);
+
+            }
+            if (southLabel) {
+                 southLabel.quaternion.copy(camera.quaternion);
+                 // Rotação adicional para o 'S' não ficar de cabeça para baixo
+                 // Precisamos compor a rotação para encarar a câmera com a rotação para corrigir o S
+                 const flipQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
+                 southLabel.quaternion.multiply(flipQuat);
+
+            }
+
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- Iniciar ---
+        init();
+        // Garante que a caixa de info começa limpa e escondida após a inicialização
+        clearAndHideSeasonInfo();
+
+    </script>
+</body>
+</html>
